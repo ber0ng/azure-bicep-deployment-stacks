@@ -19,10 +19,10 @@ jobs:
     secrets: inherit
 
   # The "prod" GitHub environment has a required reviewer, so this waits for approval.
-  prod:
-    needs: dev
-    uses: ./.github/workflows/_stack.yml
-    with:
-      environment: prod
-      apply: true
-    secrets: inherit
+  # prod:
+  #   needs: dev
+  #   uses: ./.github/workflows/_stack.yml
+  #   with:
+  #     environment: prod
+  #     apply: true
+  #   secrets: inherit
