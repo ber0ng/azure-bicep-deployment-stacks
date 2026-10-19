@@ -55,8 +55,7 @@ jobs:
             --template-file "$TEMPLATE" \
             --parameters "$PARAMS" \
             --action-on-unmanage deleteAll \
-            --deny-settings-mode denyDelete \
-            --deny-settings-excluded-principals "${{ vars.DEPLOYER_OBJECT_ID }}" \
+            --deny-settings-mode none \
             --only-show-errors
 
       - name: What-if
