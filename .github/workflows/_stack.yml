@@ -81,8 +81,7 @@ jobs:
             --template-file "$TEMPLATE" \
             --parameters "$PARAMS" \
             --action-on-unmanage deleteAll \
-            --deny-settings-mode denyDelete \
-            --deny-settings-excluded-principals "${{ vars.DEPLOYER_OBJECT_ID }}" \
+            --deny-settings-mode none \
             --description "Managed by GitHub Actions: ${{ github.repository }}@${{ github.sha }}" \
             --tags commit=${{ github.sha }} \
             --yes \
