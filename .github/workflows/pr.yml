@@ -1,0 +1,18 @@
+name: pr
+
+on:
+  pull_request:
+    branches: [main]
+    paths: ["infra/**", ".github/workflows/**", "bicepconfig.json"]
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  preview-dev:
+    uses: ./.github/workflows/_stack.yml
+    with:
+      environment: dev
+      apply: false
+    secrets: inherit

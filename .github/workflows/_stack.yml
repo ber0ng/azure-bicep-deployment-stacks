@@ -1,0 +1,98 @@
+name: Stack (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: Github environment name (dev | prod)
+        required: true
+        type: string
+      apply:
+        description: false = validate + what-if only, true = create/update the stack
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  id-token: write # OIDC token for azure/login
+  contents: read
+
+env:
+  STACK_NAME: stack-stackdemo-${{ inputs.environment }}
+  LOCATION: southeastasia
+  TEMPLATE: infra/main.bicep
+  PARAMS: infra/params/${{ inputs.environment }}.bicepparam
+
+jobs:
+  stack:
+    name: ${{ inputs.apply && 'apply' || 'preview' }} (${{ inputs.environment }})
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    concurrency:
+      group: stack-${{ inputs.environment }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Bicep lint + build
+        run: |
+          az bicep upgrade --only-show-errors
+          az bicep lint --file "$TEMPLATE"
+          az bicep build-params --file "$PARAMS" --stdout > /dev/null
+
+      - name: Validate stack
+        run: |
+          az stack sub validate \
+            --name "$STACK_NAME" \
+            --location "$LOCATION" \
+            --template-file "$TEMPLATE" \
+            --parameters "$PARAMS" \
+            --action-on-unmanage deleteAll \
+            --deny-settings-mode denyDelete \
+            --deny-settings-excluded-principals "${{ vars.DEPLOYER_OBJECT_ID }}" \
+            --only-show-errors
+
+      - name: What-if
+        run: |
+          {
+            echo "## What-if: \`${{ inputs.environment }}\`"
+            echo '```'
+            az deployment sub what-if \
+              --name "whatif-${{ github.run_id }}" \
+              --location "$LOCATION" \
+              --template-file "$TEMPLATE" \
+              --parameters "$PARAMS" \
+              --only-show-errors
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Create / update deployment stack
+        if: ${{ inputs.apply }}
+        run: |
+          az stack sub create \
+            --name "$STACK_NAME" \
+            --location "$LOCATION" \
+            --template-file "$TEMPLATE" \
+            --parameters "$PARAMS" \
+            --action-on-unmanage deleteAll \
+            --deny-settings-mode denyDelete \
+            --deny-settings-excluded-principals "${{ vars.DEPLOYER_OBJECT_ID }}" \
+            --description "Managed by GitHub Actions: ${{ github.repository }}@${{ github.sha }}" \
+            --tags commit=${{ github.sha }} \
+            --yes \
+            --only-show-errors
+
+      - name: Show outputs
+        if: ${{ inputs.apply }}
+        run: |
+          url=$(az stack sub show --name "$STACK_NAME" --query "outputs.appUrl.value" -o tsv)
+          echo "### 🚀 ${{ inputs.environment }} deployed: $url" >> "$GITHUB_STEP_SUMMARY"
+          echo "Smoke test: $url"
+          curl -fsS --retry 10 --retry-delay 10 --retry-all-errors -o /dev/null "$url"
